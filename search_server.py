@@ -30,7 +30,7 @@ SEARCH_TEMPLATE = """
 
         <div class="searchbox pure-u-3-4">
         <form method="GET" action=".">
-            <input name="search" value="{{ search|dequote }}" /><input type="submit" value="Go" />
+            <input name="search" value="{{ search }}" /><input type="submit" value="Go" />
         </form>
         </div>
 
@@ -52,7 +52,7 @@ SEARCH_TEMPLATE = """
 
         <div class="nextpage">
         <form method="GET" action=".">
-            <input type="hidden" name="search" value="{{ search|dequote }}" /><input type="submit" value="Next" /> 
+            <input type="hidden" name="search" value="{{ search }}" /><input type="submit" value="Next" /> 
         </form>
         </div>
         {% endif %}
@@ -62,10 +62,6 @@ SEARCH_TEMPLATE = """
 """
 
 conn = psycopg2.connect(os.environ.get("WSGI_DBA", ""))
-
-@app.template_filter('dequote')
-def dequote_filter(s):
-    return s.replace('"', '\\"')
 
 def do_query(qry, offset):
     cur = conn.cursor()
