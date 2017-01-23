@@ -34,7 +34,21 @@ SEARCH_TEMPLATE = """
         </form>
         </div>
 
-        {% if results %}
+        {% if not results %}
+        {% if search %}
+        <div class="error pure-u-1">
+            <p>
+                No results found.
+            </p>
+        </div>
+        {% else %}
+        <div class="info pure-u-1">
+            <p>
+                Please enter some search terms.
+            </p>
+        </div>
+        {% endif %}
+        {% else %}
         <div class="results pure-u-3-4">
         {% for item in results %}
             <div class="result">
@@ -81,7 +95,7 @@ def do_query(qry, offset):
               LIMIT %s) a
         ORDER BY rank DESC LIMIT %s OFFSET %s;
         """, (qry, qry, qry, RESULTS_PER_PAGE*RESULTS_OVERSCAN, RESULTS_PER_PAGE, offset))
-    return cur.fetchall()
+    return list(cur.fetchall())
 
 @app.route('/', methods=["GET", "POST"])
 def search():
