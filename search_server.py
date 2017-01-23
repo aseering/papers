@@ -2,9 +2,8 @@ try:
     import psycopg2
 except ImportError:
     import psycopg2cffi as psycopg2
-from jinja2 import Template
 
-from flask import Flask, request
+from flask import Flask, request, render_template_string
 app = Flask(__name__)
 
 RESULTS_PER_PAGE = 10
@@ -14,7 +13,7 @@ RESULTS_PER_PAGE = 10
 # Then rank and return the results.
 RESULTS_OVERSCAN = 10
 
-SEARCH_TEMPLATE = Template("""
+SEARCH_TEMPLATE = """
 <!doctype html>
 <html>
 <head>
@@ -31,7 +30,7 @@ SEARCH_TEMPLATE = Template("""
 
         <div class="searchbox pure-u-3-4">
         <form method="GET" action=".">
-            <input name="search" value="{{ search }}" /><input type="submit" value="Go" />
+            <input name="search" value="{{ search|dequote }}" /><input type="submit" value="Go" />
         </form>
         </div>
 
@@ -53,16 +52,20 @@ SEARCH_TEMPLATE = Template("""
 
         <div class="nextpage">
         <form method="GET" action=".">
-            <input type="hidden" name="search" value="{{ search }}" /><input type="submit" value="Next" /> 
+            <input type="hidden" name="search" value="{{ search|dequote }}" /><input type="submit" value="Next" /> 
         </form>
         </div>
         {% endif %}
     </div>
 </body>
 </html>
-""")
+"""
 
 conn = psycopg2.connect(os.environ.get("WSGI_DBA", ""))
+
+@app.template_filter('dequote')
+def dequote_filter(s):
+    return s.replace('"', '\\"')
 
 def do_query(qry, offset):
     cur = conn.cursor()
@@ -93,5 +96,6 @@ def search():
 
     print results
     
-    return SEARCH_TEMPLATE.render(results=results,
-                                  search=request.args.get("search", "").replace('"', '\\"'))
+    return render_template_string(SEARCH_TEMPLATE,
+                                  results = results,
+                                  search = request.args.get("search", ""))
