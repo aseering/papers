@@ -20,7 +20,7 @@ RESULTS_PER_PAGE = 30
 # If we get more than RESULTS_PER_PAGE results,
 # scan up to this times as many more results forwards before giving up.
 # Then rank and return the results.
-RESULTS_OVERSCAN = 10
+RESULTS_OVERSCAN = 300
 
 SEARCH_TEMPLATE = """
 <!doctype html>
@@ -86,6 +86,53 @@ SEARCH_TEMPLATE = """
 
 conn = psycopg2.connect(os.environ.get("WSGI_DBA", ""))
 
+def prepare_query():
+    cur = conn.cursor()
+    cur.execute("""\
+        PREPARE article_search AS
+
+        SELECT articles1.id AS id,
+               articles2.site AS site,
+               REPLACE(articles2.url, 'index.html', '') AS url,
+               articles2.title AS title,
+               ts_headline('english', articles2.fulltext_no_html, articles1.query, 'MinWords=30,MaxWords=50') AS excerpt,
+               articles1.count AS count,
+               articles1.rank AS rank
+        FROM (
+            SELECT FIRST(id) AS id,
+                   FIRST(rank) AS rank,
+                   FIRST(query) AS query,
+                   COUNT(*) AS count
+            FROM (
+                SELECT id,
+                       query,
+                       site,
+                       title,
+                       ts_rank_cd(fulltext_tsvector, query) AS rank
+                FROM (
+                      SELECT *
+                      FROM (
+                          SELECT id,
+                                 site,
+                                 title,
+                                 fulltext_tsvector,
+                                 plainto_tsquery($1) AS query
+                          FROM articles ) a
+                      WHERE fulltext_tsvector @@ query
+                      LIMIT %s) b
+                ORDER BY rank DESC
+            ) c
+            GROUP BY site, title
+            ORDER BY rank DESC LIMIT %s OFFSET $2
+        ) AS articles1,
+        articles AS articles2
+        WHERE articles1.id = articles2.id
+        ORDER BY rank;
+        """, (RESULTS_OVERSCAN, RESULTS_PER_PAGE))
+
+# Pre-plan giant query at application start-up
+prepare_query()    
+
 @app.template_filter('default_value')
 def default_value_filter(s, default):
     if not s:
@@ -98,38 +145,10 @@ def send_css(path):
 
 def do_query(qry, offset):
     cur = conn.cursor(cursor_factory=DictCursor)
-    cur.execute("""
-        SELECT MAX(id) AS id,
-               site,
-               MAX(url) AS url,
-               title,
-               ts_headline('english', fulltext_no_html, query, 'MinWords=30,MaxWords=50') AS excerpt,
-               MAX(rank) AS rank,
-               COUNT(*) AS count
-        FROM (
-            SELECT id,
-                   site,
-                   url,
-                   title,
-                   fulltext_no_html,
-                   query,
-                   ts_rank_cd(fulltext_tsvector, query) AS rank
-            FROM (
-                  SELECT id,
-                         site,
-                         REPLACE(url, 'index.html', '') AS url,
-                         title,
-                         fulltext_no_html,
-                         fulltext_tsvector,
-                         plainto_tsquery(%s) AS query
-                  FROM articles
-                  WHERE fulltext_tsvector @@ query
-                  LIMIT %s) a
-            ORDER BY rank DESC
-        ) b
-        GROUP BY site, title, excerpt
-        ORDER BY rank DESC LIMIT %s OFFSET %s;
-        """, (qry, RESULTS_PER_PAGE*RESULTS_OVERSCAN, RESULTS_PER_PAGE, offset))
+
+    cur.execute("EXECUTE article_search(%s, %s);",
+                (qry, offset))
+                
     return list(cur.fetchall())
 
 @app.route('/', methods=["GET"])
