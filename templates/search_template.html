@@ -6,8 +6,9 @@
 
     <title>Newspaper Search</title>
 
-    <link rel="stylesheet" href="https://unpkg.com/purecss@0.6.2/build/pure-min.css"></head>
-
+    <link rel="stylesheet" href="https://unpkg.com/purecss@0.6.2/build/pure-min.css">
+    <link rel="stylesheet" href="css/main.css">
+</head>
 <body>
     <div class="content pure-u-1">
         <h1>Newspaper Search</h1>
@@ -37,11 +38,11 @@
         {% for item in results %}
             <div class="result">
                 <div class="link">
-                    <a href="{{ item["url"].encode("utf-8") }}">{{ item["title"].encode("utf-8") }}</a>
+                    <!-- {{ item["id"] }} --><a href="{{ item["url"] }}">{{ item["title"]|default_value("(Page has no title)") }}</a> ({% if item["count"] > 1 %}and {{ item["count"] - 1 }} other page{% if item["count"] > 2%}s{% endif %}; {% endif %}<a href="http://{{ item["site"] }}">{{ item["site"] }}</a>)
                 </div>
                 <div class="excerpt">
                     <p>
-                        {{ item["excerpt"].encode("utf-8") }}
+                        {{ item["excerpt"]|safe }}
                     </p>
                 </div>
             </div>
@@ -50,7 +51,9 @@
 
         <div class="nextpage">
         <form method="GET" action=".">
-            <input type="hidden" name="search" value="{{ search }}" /><input type="submit" value="Next" /> 
+          <input type="hidden" name="search" value="{{ search }}" />
+	  <input type="hidden" name="page" value="{{ next_page }}" />
+	  <input type="submit" value="Next" /> 
         </form>
         </div>
         {% endif %}

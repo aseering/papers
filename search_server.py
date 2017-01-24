@@ -1,14 +1,21 @@
+#!/usr/bin/env python
+
 try:
     import psycopg2
     from psycopg2.extras import DictCursor
+    import psycopg2.extensions as psycopg2_extensions
 except ImportError:
     import psycopg2cffi as psycopg2
     from psycopg2cffi.extras import DictCursor
-
-from flask import Flask, request, render_template
+    import psycopg2cffi.extensions as psycopg2_extensions
+    
+psycopg2_extensions.register_type(psycopg2.extensions.UNICODE)
+psycopg2_extensions.register_type(psycopg2.extensions.UNICODEARRAY)
+    
+from flask import Flask, request, render_template, send_from_directory
 app = Flask(__name__)
 
-RESULTS_PER_PAGE = 10
+RESULTS_PER_PAGE = 30
 
 # If we get more than RESULTS_PER_PAGE results,
 # scan up to this times as many more results forwards before giving up.
@@ -79,35 +86,63 @@ SEARCH_TEMPLATE = """
 
 conn = psycopg2.connect(os.environ.get("WSGI_DBA", ""))
 
+@app.template_filter('default_value')
+def default_value_filter(s, default):
+    if not s:
+        return default
+    return s
+    
+@app.route('/css/<path:path>')
+def send_css(path):
+    return send_from_directory('css', path)
+
 def do_query(qry, offset):
     cur = conn.cursor(cursor_factory=DictCursor)
     cur.execute("""
-        SELECT url,
+        SELECT MAX(id) AS id,
+               site,
+               MAX(url) AS url,
                title,
-               fulltext,
-               ts_headline('english', fulltext, plainto_tsquery(%s)) AS excerpt,
-               ts_rank_cd(fulltext_tsvector, plainto_tsquery(%s)) AS rank
+               ts_headline('english', fulltext_no_html, query, 'MinWords=30,MaxWords=50') AS excerpt,
+               MAX(rank) AS rank,
+               COUNT(*) AS count
         FROM (
-              SELECT url,
-                     title,
-                     fulltext,
-                     fulltext_tsvector
-              FROM articles
-              WHERE fulltext_tsvector @@ plainto_tsquery('english', %s)
-              LIMIT %s) a
+            SELECT id,
+                   site,
+                   url,
+                   title,
+                   fulltext_no_html,
+                   query,
+                   ts_rank_cd(fulltext_tsvector, query) AS rank
+            FROM (
+                  SELECT id,
+                         site,
+                         REPLACE(url, 'index.html', '') AS url,
+                         title,
+                         fulltext_no_html,
+                         fulltext_tsvector,
+                         plainto_tsquery(%s) AS query
+                  FROM articles
+                  WHERE fulltext_tsvector @@ query
+                  LIMIT %s) a
+            ORDER BY rank DESC
+        ) b
+        GROUP BY site, title, excerpt
         ORDER BY rank DESC LIMIT %s OFFSET %s;
-        """, (qry, qry, qry, RESULTS_PER_PAGE*RESULTS_OVERSCAN, RESULTS_PER_PAGE, offset))
+        """, (qry, RESULTS_PER_PAGE*RESULTS_OVERSCAN, RESULTS_PER_PAGE, offset))
     return list(cur.fetchall())
 
-@app.route('/', methods=["GET", "POST"])
+@app.route('/', methods=["GET"])
 def search():
     results = []
+    page = 1
     if request.args and "search" in request.args:
-        page = int(request.args.get("page", "0"))
-        results = do_query(request.args["search"], page * RESULTS_PER_PAGE)
-
-    print results
+        # Make 'page' 1-indexed, for human readability.
+        # But the actual offset that SQL wants 
+        page = int(request.args.get("page", "1"))
+        results = do_query(request.args["search"], (page - 1) * RESULTS_PER_PAGE)
     
     return render_template("search_template.html",
                            results = results,
-                           search = request.args.get("search", ""))
+                           search = request.args.get("search", ""),
+                           next_page = page + 1)
