@@ -1,9 +1,11 @@
 try:
     import psycopg2
+    from psycopg2.extras import DictCursor
 except ImportError:
     import psycopg2cffi as psycopg2
+    from psycopg2cffi.extras import DictCursor
 
-from flask import Flask, request, render_template_string
+from flask import Flask, request, render_template
 app = Flask(__name__)
 
 RESULTS_PER_PAGE = 10
@@ -78,7 +80,7 @@ SEARCH_TEMPLATE = """
 conn = psycopg2.connect(os.environ.get("WSGI_DBA", ""))
 
 def do_query(qry, offset):
-    cur = conn.cursor()
+    cur = conn.cursor(cursor_factory=DictCursor)
     cur.execute("""
         SELECT url,
                title,
@@ -106,6 +108,6 @@ def search():
 
     print results
     
-    return render_template_string(SEARCH_TEMPLATE,
-                                  results = results,
-                                  search = request.args.get("search", ""))
+    return render_template("search_template.html",
+                           results = results,
+                           search = request.args.get("search", ""))
