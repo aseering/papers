@@ -1,0 +1,35 @@
+@media only screen and (min-device-width: 480px)
+{
+    .content {
+        margin-left: 72pt;
+        width: 75%;
+    }
+}
+@media only screen and (max-device-width: 480px)
+{
+    .content {
+        margin-left: 5pt;
+        margin-right: 5pt;
+        width: *;
+    }
+}
+body {
+    padding-left: 0;
+    padding-right: 0;
+    margin-left: 0;
+    margin-right: 0;
+    width: 100%;
+}
+.searchbox {
+    margin-bottom: 24pt;
+}
+.nextpage {
+    margin-bottom: 72pt;
+}
+.result {
+    border-style: solid;
+    border-width: 1px;
+    border-color: silver;
+    margin: 10pt 0 10pt 0;
+    padding: 5pt;
+}
