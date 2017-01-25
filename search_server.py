@@ -133,7 +133,7 @@ def prepare_query():
                articles.site AS site,
                REPLACE(articles.url, 'index.html', '') AS url,
                articles.title AS title,
-               ts_headline('english', articles.fulltext_no_html, plainto_tsquery($1), 'MinWords=30,MaxWords=50') AS excerpt,
+               TS_HEADLINE('english', SUBSTRING(articles.fulltext_no_html, 0, 7000), PLAINTO_TSQUERY($1), 'MinWords=30,MaxWords=50') AS excerpt,
                grouped_matches.count AS count
         FROM (
             SELECT FIRST(id) AS id,
@@ -143,9 +143,9 @@ def prepare_query():
                 SELECT id,
                        site,
                        title,
-                       ts_rank_cd(fulltext_tsvector, plainto_tsquery($1)) AS rank
+                       TS_RANK_CD(fulltext_tsvector, PLAINTO_TSQUERY($1)) AS rank
                 FROM articles
-                WHERE fulltext_tsvector @@ plainto_tsquery($1)
+                WHERE fulltext_tsvector @@ PLAINTO_TSQUERY($1)
                 LIMIT %s
             ) AS ranked_ordered_matches
             GROUP BY site, title
